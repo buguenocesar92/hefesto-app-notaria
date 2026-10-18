@@ -1,0 +1,89 @@
+# ---------------------------------------------------------------------------
+# Caddy: unico punto de entrada publico de la aplicacion de notarias.
+# ---------------------------------------------------------------------------
+# El navegador habla solo con Caddy. Caddy reparte:
+#
+#   /api/**       -> contenedor `api` (Laravel)
+#   /salud-interna -> respuesta local, sin pasar por la aplicacion
+#   todo lo demas  -> contenedor `web` (Nuxt)
+#
+# POR QUE EL NAVEGADOR NO HABLA DIRECTO CON LA API
+# -----------------------------------------------
+# La sesion viaja en una cookie HttpOnly + Secure + SameSite=Lax. Con una
+# cookie asi, el navegador solo la envia a SU MISMO origen. Si la API
+# respondiera en otro origen, habria que resolver CORS con credenciales y el
+# token CSRF se volveria mas fragil. Al meter todo en un solo origen, la
+# cookie viaja sola y el CSRF se resuelve con la cabecera `X-XSRF-TOKEN`.
+#
+# PARA CAMBIAR EL DOMINIO
+# -----------------------
+# Reemplazar `notaria.hefestostudio.cl` en el bloque de mas abajo por el
+# dominio real de la notaria. El dominio va en una variable de entorno para
+# que cambiarlo no obligue a reconstruir la imagen.
+# ---------------------------------------------------------------------------
+
+{
+	email {$ACME_EMAIL:admin@hefestostudio.cl}
+	header {
+		# El sistema maneja datos de personas: la cabecera HSTS obliga al
+		# navegador a no volver a HTTP ni aunque alguien lo pida.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# La aplicacion no debe quedar registrada en caches ni en proxies.
+		Cache-Control "no-store"
+		-Server
+		# El contenido es una aplicacion interna: nada tiene que ejecutarse
+		# desde la pagina.
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	}
+}
+
+# Puerto 80 solo para la redireccion y la validacion del certificado.
+:80 {
+	redir {
+		to https://{host}{uri}
+	}
+}
+
+{$NOTARIA_DOMINIO:notaria.hefestostudio.cl} {
+	encode zstd gzip
+
+	# ------------------------------------------------------------------------
+	# La API.
+	# ------------------------------------------------------------------------
+	handle /api/* {
+		reverse_proxy api:8080 {
+			# El cuerpo puede ser un archivo (por ejemplo, la subida de un
+			# documento), asi que no se fija un limite arbitrario aqui: lo
+			# controla Laravel (`upload_max_filesize` en php.ini).
+			transport http {
+				read_timeout 60s
+			}
+		}
+	}
+
+	# ------------------------------------------------------------------------
+	# Comprobacion de salud interna. NO es publica: se responde sin pasar por
+	# la aplicacion, para que el orquestador y el operador puedan revisarla.
+	# ------------------------------------------------------------------------
+	handle /salud-interna* {
+		respond "ok" 200
+	}
+
+	# ------------------------------------------------------------------------
+	# La interfaz.
+	# ------------------------------------------------------------------------
+	handle {
+		reverse_proxy web:3000
+	}
+
+	log {
+		output file /var/log/caddy/acceso.log {
+			roll_size 10MiB
+			roll_keep 10
+		}
+		format json
+	}
+}

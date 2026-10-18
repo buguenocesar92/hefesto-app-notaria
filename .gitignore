@@ -1,0 +1,38 @@
+# Dependencias
+/vendor/
+/node_modules/
+
+# Secretos. NUNCA se suben.
+/.env
+/.env.*
+!/.env.example
+/api/.env
+!/api/.env.example
+/web/.env
+!/web/.env.example
+
+# Logs
+/api/storage/logs/*.log
+/api/storage/framework/cache/*
+/api/storage/framework/sessions/*
+/api/storage/framework/views/*
+/api/storage/framework/uploads/*
+!api/storage/framework/**/.gitignore
+
+# DOCUMENTOS
+#
+# El volumen de documentos NO se versiona, y no es una medida de rendimiento:
+# es una medida de proteccion. Son archivos de notaria, con datos de personas,
+# y no van a estar en un repositorio jamas.
+/api/storage/app/documentos/*
+!api/storage/app/documentos/.gitignore
+
+# Sistema
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.log
+.phpunit.cache/
+.phpunit.result.cache
